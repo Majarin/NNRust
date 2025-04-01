@@ -1,53 +1,31 @@
+mod data;
+mod inference;
+mod model;
+mod training;
+
+use crate::{model::ModelConfig, training::TrainingConfig};
 use burn::{
-    nn::{
-        conv::{Conv2d, Conv2dConfig},
-        pool::{AdaptiveAvgPool2d, AdaptiveAvgPool2dConfig},
-        Dropout, DropoutConfig, Linear, LinearConfig, Relu,
-    },
-    prelude::*,
+    backend::{Autodiff, Wgpu},
+    data::dataset::Dataset,
+    optim::AdamConfig,
 };
-
-use burn::backend::Wgpu;
-
-#[derive(Module, Debug)]
-pub struct Model<B: Backend> {
-    conv1: Conv2d<B>,
-    conv2: Conv2d<B>,
-    pool: AdaptiveAvgPool2d,
-    dropout: Dropout,
-    linear1: Linear<B>,
-    linear2: Linear<B>,
-    activation: Relu,
-}
-
-#[derive(Config, Debug)]
-pub struct ModelConfig {
-    num_classes: usize,
-    hidden_size: usize,
-    #[config(default = "0.5")]
-    dropout: f64,
-}
-
-impl ModelConfig {
-    /// Returns the initialized model.
-    pub fn init<B: Backend>(&self, device: &B::Device) -> Model<B> {
-        Model {
-            conv1: Conv2dConfig::new([1, 8], [3, 3]).init(device),
-            conv2: Conv2dConfig::new([8, 16], [3, 3]).init(device),
-            pool: AdaptiveAvgPool2dConfig::new([8, 8]).init(),
-            activation: Relu::new(),
-            linear1: LinearConfig::new(16 * 8 * 8, self.hidden_size).init(device),
-            linear2: LinearConfig::new(self.hidden_size, self.num_classes).init(device),
-            dropout: DropoutConfig::new(self.dropout).init(),
-        }
-    }
-}
 
 fn main() {
     type MyBackend = Wgpu<f32, i32>;
+    type MyAutodiffBackend = Autodiff<MyBackend>;
 
-    let device = Default::default();
-    let model = ModelConfig::new(10, 512).init::<MyBackend>(&device);
-
-    println!("{}", model);
+    let device = burn::backend::wgpu::WgpuDevice::default();
+    let artifact_dir = "/tmp/guide";
+    crate::training::train::<MyAutodiffBackend>(
+        artifact_dir,
+        TrainingConfig::new(ModelConfig::new(10, 512), AdamConfig::new()),
+        device.clone(),
+    );
+    crate::inference::infer::<MyBackend> (
+        artifact_dir,
+        device,
+        burn::data::dataset::vision::MnistDataset::test()
+            .get(42)
+            .unwrap(),
+    );
 }
