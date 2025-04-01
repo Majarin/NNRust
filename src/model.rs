@@ -1,4 +1,8 @@
-use burn::prelude::*; // Bruker prelude for relevante moduler
+use burn::{
+    module::Param,
+    nn::Linear,
+    prelude::*,
+}; // Bruker prelude for relevante moduler
 use crate::config::ModelConfig; // Importerer ModelConfig fra config.rs
 
 #[derive(Module, Debug, Clone)]
