@@ -1,11 +1,10 @@
 use crate::{
-    data::{MnistBatch, MnistBatcher},
-    model::{Model, ModelConfig},
+    config::TrainingConfig,       // Importerer TrainingConfig fra config.rs
+    data::{SnakeBatch, SnakeBatcher},
+    model::SnakeModel,
 };
 use burn::{
-    data::{dataloader::DataLoaderBuilder, dataset::vision::MnistDataset},
-    nn::loss::CrossEntropyLossConfig,
-    optim::AdamConfig,
+    data::dataloader::DataLoaderBuilder,
     prelude::*,
     record::CompactRecorder,
     tensor::backend::AutodiffBackend,
@@ -13,55 +12,39 @@ use burn::{
         metric::{AccuracyMetric, LossMetric},
         ClassificationOutput, LearnerBuilder, TrainOutput, TrainStep, ValidStep,
     },
+    nn::loss::CrossEntropyLossConfig,
 };
 
-impl<B: Backend> Model<B> {
+impl<B: Backend> SnakeModel<B> {
     pub fn forward_classification(
         &self,
-        images: Tensor<B, 3>,
-        targets: Tensor<B, 1, Int>,
+        state: Tensor<B, 3>,
+        rewards: Tensor<B, 1, Int>,
     ) -> ClassificationOutput<B> {
-        let output = self.forward(images);
+        let output = self.forward(state);
         let loss = CrossEntropyLossConfig::new()
             .init(&output.device())
-            .forward(output.clone(), targets.clone());
+            .forward(output.clone(), rewards.clone());
 
-        ClassificationOutput::new(loss, output, targets)
+        ClassificationOutput::new(loss, output, rewards)
     }
 }
 
-impl<B: AutodiffBackend> TrainStep<MnistBatch<B>, ClassificationOutput<B>> for Model<B> {
-    fn step(&self, batch: MnistBatch<B>) -> TrainOutput<ClassificationOutput<B>> {
-        let item = self.forward_classification(batch.images, batch.targets);
+impl<B: AutodiffBackend> TrainStep<SnakeBatch<B>, ClassificationOutput<B>> for SnakeModel<B> {
+    fn step(&self, batch: SnakeBatch<B>) -> TrainOutput<ClassificationOutput<B>> {
+        let item = self.forward_classification(batch.state, batch.rewards);
 
         TrainOutput::new(self, item.loss.backward(), item)
     }
 }
 
-impl<B: Backend> ValidStep<MnistBatch<B>, ClassificationOutput<B>> for Model<B> {
-    fn step(&self, batch: MnistBatch<B>) -> ClassificationOutput<B> {
-        self.forward_classification(batch.images, batch.targets)
+impl<B: Backend> ValidStep<SnakeBatch<B>, ClassificationOutput<B>> for SnakeModel<B> {
+    fn step(&self, batch: SnakeBatch<B>) -> ClassificationOutput<B> {
+        self.forward_classification(batch.state, batch.rewards)
     }
 }
 
-#[derive(Config)]
-pub struct TrainingConfig {
-    pub model: ModelConfig,
-    pub optimizer: AdamConfig,
-    #[config(default = 10)]
-    pub num_epochs: usize,
-    #[config(default = 64)]
-    pub batch_size: usize,
-    #[config(default = 4)]
-    pub num_workers: usize,
-    #[config(default = 42)]
-    pub seed: u64,
-    #[config(default = 1.0e-4)]
-    pub learning_rate: f64,
-}
-
 fn create_artifact_dir(artifact_dir: &str) {
-    // Remove existing artifacts before to get an accurate learner summary
     std::fs::remove_dir_all(artifact_dir).ok();
     std::fs::create_dir_all(artifact_dir).ok();
 }
@@ -74,20 +57,20 @@ pub fn train<B: AutodiffBackend>(artifact_dir: &str, config: TrainingConfig, dev
 
     B::seed(config.seed);
 
-    let batcher_train = MnistBatcher::<B>::new(device.clone());
-    let batcher_valid = MnistBatcher::<B::InnerBackend>::new(device.clone());
+    let batcher_train = SnakeBatcher::<B>::new(device.clone());
+    let batcher_valid = SnakeBatcher::<B::InnerBackend>::new(device.clone());
 
     let dataloader_train = DataLoaderBuilder::new(batcher_train)
         .batch_size(config.batch_size)
         .shuffle(config.seed)
         .num_workers(config.num_workers)
-        .build(MnistDataset::train());
+        .build();
 
     let dataloader_test = DataLoaderBuilder::new(batcher_valid)
         .batch_size(config.batch_size)
         .shuffle(config.seed)
         .num_workers(config.num_workers)
-        .build(MnistDataset::test());
+        .build();
 
     let learner = LearnerBuilder::new(artifact_dir)
         .metric_train_numeric(AccuracyMetric::new())

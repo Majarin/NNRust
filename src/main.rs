@@ -1,31 +1,31 @@
-mod data;
-mod inference;
-mod model;
 mod training;
+mod data;
+mod model;
+mod config;
 
-use crate::{model::ModelConfig, training::TrainingConfig};
-use burn::{
-    backend::{Autodiff, Wgpu},
-    data::dataset::Dataset,
-    optim::AdamConfig,
+use std::default;
+
+use crate::{
+    config::{TrainingConfig,ModelConfig},
 };
+use burn::optim::AdamConfig;
+use burn::tensor::backend::AutodiffBackend;
 
 fn main() {
-    type MyBackend = Wgpu<f32, i32>;
-    type MyAutodiffBackend = Autodiff<MyBackend>;
+    let config = TrainingConfig {
+        model: ModelConfig {
+            input_size: 100, // 10x10 rutenett
+            hidden_size: 128,
+            output_size: 4,  // Fire handlinger
+        },
+        optimizer: AdamConfig::new(),
+        num_epochs: 50,
+        batch_size: 32,
+        num_workers: 4,
+        seed: 42,
+        learning_rate: 1e-3,
+    };
 
-    let device = burn::backend::wgpu::WgpuDevice::default();
-    let artifact_dir = "/tmp/guide";
-    crate::training::train::<MyAutodiffBackend>(
-        artifact_dir,
-        TrainingConfig::new(ModelConfig::new(10, 512), AdamConfig::new()),
-        device.clone(),
-    );
-    crate::inference::infer::<MyBackend> (
-        artifact_dir,
-        device,
-        burn::data::dataset::vision::MnistDataset::test()
-            .get(42)
-            .unwrap(),
-    );
+    let device = AutodiffBackend::<f32>::default().device();
+    training::train("artifacts", config, device);
 }
