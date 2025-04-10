@@ -1,27 +1,23 @@
 use crate::{
     config::TrainingConfig,       // Importerer TrainingConfig fra config.rs
-    data::{SnakeBatch, SnakeBatcher},
+    data::{SnakeBatch, SnakeBatcher, MyBatcher},
     model::SnakeModel,
 };
 use burn::{
-    data::dataloader::DataLoaderBuilder,
-    prelude::*,
-    record::CompactRecorder,
-    tensor::backend::AutodiffBackend,
-    train::{
+    data::dataloader::{batcher::Batcher, DataLoaderBuilder}, nn::loss::CrossEntropyLossConfig, prelude::*, record::CompactRecorder, tensor::backend::AutodiffBackend, train::{
         metric::{AccuracyMetric, LossMetric},
         ClassificationOutput, LearnerBuilder, TrainOutput, TrainStep, ValidStep,
-    },
-    nn::loss::CrossEntropyLossConfig,
+    }
 };
 
 impl<B: Backend> SnakeModel<B> {
     pub fn forward_classification(
         &self,
-        state: Tensor<B, 3>,
+        state: Tensor<B, 2>,
         rewards: Tensor<B, 1, Int>,
     ) -> ClassificationOutput<B> {
-        let output = self.forward(state);
+        //let reshaped_state = state.flatten(1, usize::MAX);
+        let output: Tensor<B, 2> = self.forward(state);
         let loss = CrossEntropyLossConfig::new()
             .init(&output.device())
             .forward(output.clone(), rewards.clone());
@@ -49,7 +45,18 @@ fn create_artifact_dir(artifact_dir: &str) {
     std::fs::create_dir_all(artifact_dir).ok();
 }
 
-pub fn train<B: AutodiffBackend>(artifact_dir: &str, config: TrainingConfig, device: B::Device) {
+#[derive(Clone, Debug)]
+pub struct CustomSnakeBatcher<B: Backend> {
+    pub batches: SnakeBatcher<B>,
+}
+
+impl<B: Backend> Batcher<SnakeBatch<B>, Vec<SnakeBatch<B>>> for MyBatcher<B> {
+    fn batch(&self, items: Vec<SnakeBatch<B>>) -> Vec<SnakeBatch<B>> {
+        items
+    }
+}
+
+pub fn train<B: AutodiffBackend>(artifact_dir: &str, config: TrainingConfig, device: B::Device, batches: Vec<SnakeBatch<B>>) -> Learner<SnakeModel<B>, B> {
     create_artifact_dir(artifact_dir);
     config
         .save(format!("{artifact_dir}/config.json"))
@@ -57,20 +64,22 @@ pub fn train<B: AutodiffBackend>(artifact_dir: &str, config: TrainingConfig, dev
 
     B::seed(config.seed);
 
-    let batcher_train = SnakeBatcher::<B>::new(device.clone());
+    let batcher_train_not_dyn = SnakeBatcher::<B>::new(device.clone());
+    let batcher_train = CustomSnakeBatcher { batches: batcher_train_not_dyn };
     let batcher_valid = SnakeBatcher::<B::InnerBackend>::new(device.clone());
+    let dataset = InMemDataset::new(batches.clone());
 
     let dataloader_train = DataLoaderBuilder::new(batcher_train)
         .batch_size(config.batch_size)
         .shuffle(config.seed)
         .num_workers(config.num_workers)
-        .build();
+        .build(batcher_train);
 
     let dataloader_test = DataLoaderBuilder::new(batcher_valid)
         .batch_size(config.batch_size)
         .shuffle(config.seed)
         .num_workers(config.num_workers)
-        .build();
+        .build(dataset);
 
     let learner = LearnerBuilder::new(artifact_dir)
         .metric_train_numeric(AccuracyMetric::new())

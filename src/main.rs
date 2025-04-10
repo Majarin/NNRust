@@ -3,7 +3,10 @@ mod config;
 mod model;
 mod training;
 
-use crate::config::{TrainingConfig, ModelConfig}; // Correcting the import to use config.rs
+use crate::{
+    config::{TrainingConfig, ModelConfig},
+    data::SnakeBatcher
+}; // Correcting the import to use config.rs
 use burn::{
     backend::{Autodiff, Wgpu},
     optim::AdamConfig,

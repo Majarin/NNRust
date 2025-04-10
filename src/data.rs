@@ -1,10 +1,13 @@
 use {
     burn::{
-        data::dataloader::{
-            DataLoader, 
-            DataLoaderBuilder
+        data::{
+            dataloader::{
+                batcher::Batcher,
+                DataLoader,
+                DataLoaderBuilder
+            }, 
+            dataset::InMemDataset
         },
-        data::dataset::InMemDataset,
         prelude::*
     },
     rand::Rng,
@@ -14,7 +17,18 @@ use {
 #[derive(Clone, Debug)]
 pub struct SnakeBatch<B: Backend> {
     pub state: Tensor<B, 2>,
-    pub rewards: Tensor<B, 2>,
+    pub rewards: Tensor<B, 1, Int>,
+}
+
+#[derive(Clone, Debug)]
+pub struct MyBatcher<B: Backend> {
+    pub batches: Vec<SnakeBatch<B>>,
+}
+
+impl<B: Backend> Batcher<SnakeBatch<B>, Vec<SnakeBatch<B>>> for MyBatcher<B> {
+    fn batch(&self, items: Vec<SnakeBatch<B>>) -> Vec<SnakeBatch<B>> {
+        items
+    }
 }
 
 pub struct SnakeBatcher<B: Backend> {
@@ -26,7 +40,7 @@ impl<B: Backend> SnakeBatcher<B> {
         Self { device }
     }
 
-    pub fn load_data(&self, batch_size: usize, train: bool) -> Arc<dyn DataLoader<B>> {
+    pub fn load_data(&self, batch_size: usize, train: bool) -> Arc<dyn DataLoader<Vec<SnakeBatch<B>>>> {
         let mut batches: Vec<SnakeBatch<B>> = vec![];
     
         for _ in 0..batch_size {
@@ -35,11 +49,14 @@ impl<B: Backend> SnakeBatcher<B> {
             batches.push(SnakeBatch { state, rewards });
         }
         
-        let dataset = InMemDataset::new(batches);
+        let build_dataset = InMemDataset::new(batches.clone());
+        let new_batches = MyBatcher { batches };
         
-        DataLoaderBuilder::new(batches)
+        let data_loder: Arc<dyn DataLoader<Vec<SnakeBatch<B>>>> = DataLoaderBuilder::new(new_batches)
             .batch_size(batch_size)
             .shuffle(if train { rand::thread_rng().gen_range(0..u64::MAX) } else { 0 })
-            .build(dataset)
+            .build(build_dataset);
+
+        data_loder
     }
 }
