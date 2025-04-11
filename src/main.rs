@@ -21,7 +21,7 @@ fn main() {
         TrainingConfig::new(ModelConfig::new(10, 512), AdamConfig::new()),
         device.clone(),
     );
-    crate::inference::infer::<MyBackend> (
+    crate::inference::infer::<MyBackend>(
         artifact_dir,
         device,
         burn::data::dataset::vision::MnistDataset::test()
