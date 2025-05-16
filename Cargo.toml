@@ -4,10 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-burn = { version = "0.16.0", features = ["wgpu", "train", "vision"] }
-bincode = "=2.0.0-rc.3"
-bincode_derive = "=2.0.0-rc.3"
-rand = "0.8.3"
+burn = { version = "0.12", features = ["tch"] }
+burn-tch = "0.12"
+ndarray = "0.15"
+ndarray-npy = "0.8"
 
 [features]
 default = ["burn/default"]
