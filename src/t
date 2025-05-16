@@ -1,1 +1,0 @@
-const dataloader_test: Arc<dyn DataLoader<B>> = load_data(&self, batch_size, false);
