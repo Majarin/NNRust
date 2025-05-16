@@ -1,6 +1,9 @@
+use burn::prelude::*;
 use burn::module::Module;
-use burn::nn::{Linear, Relu, CrossEntropyLoss};
-use burn::tensor::{backend::TchBackend, Tensor};
+use burn::nn::{LinearConfig};
+use burn::nn::loss::CrossEntropyLoss;
+use burn::tensor::Tensor;
+use burn::backend::tch::TchBackend;
 use burn::train::optimizer::Adam;
 use ndarray_npy::NpzReader;
 use std::fs::File;
@@ -8,7 +11,7 @@ use ndarray::Array3;
 
 type Backend = TchBackend<f32>;
 
-#[derive(Module, Debug)]
+#[derive(Module, Debug, Clone)]
 struct Model {
     fc1: Linear<Backend>,
     fc2: Linear<Backend>,
@@ -39,7 +42,7 @@ fn load_dataset(path: &str) -> (Tensor<Backend, 2>, Tensor<Backend, 1>) {
     // Flatten hver 28x28 til 784
     let images_flat = images.into_shape((num_samples, 28 * 28)).unwrap();
     let images_vec = images_flat.iter().cloned().collect::<Vec<f32>>();
-    let images_tensor: Tensor<usize, 2> = Tensor::<Backend, 2>::from_floats(images_vec, [num_samples, 28 * 28]);
+    let images_tensor= Tensor::<Backend, 2>::from_floats(images_vec, [num_samples, 28 * 28]);
 
     // Henter ut etikettene
     let labels: ndarray::Array1<u8> = npz.by_name("labels.npy").unwrap();

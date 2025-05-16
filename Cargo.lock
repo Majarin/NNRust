@@ -48,6 +48,7 @@ dependencies = [
  "burn-tch",
  "ndarray",
  "ndarray-npy",
+ "tch",
 ]
 
 [[package]]
@@ -253,6 +254,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf4d45b77914eceb4e4d9de599d1801d2309bf9cf16e25d9ded340befa59a927"
 dependencies = [
  "bincode",
+ "burn-autodiff",
  "burn-candle",
  "burn-common",
  "burn-dataset",
