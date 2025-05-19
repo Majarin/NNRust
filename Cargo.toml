@@ -1,11 +1,19 @@
 [package]
-name = "ai"
+name = "image_recognition"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
-burn = { version = "0.12", features = ["tch", "train"] }
-burn-tch = "0.12"
-tch = "0.15"
-ndarray = "0.15"
-ndarray-npy = "0.8"
+burn = { version = "0.10.0", features = ["ndarray", "train", "tch"] }
+burn-tensor = { version = "0.10.0" }
+burn-autodiff = { version = "0.10.0" }
+burn-ndarray = { version = "0.10.0" }
+burn-train = { version = "0.10.0" }
+burn-tch = { version = "0.10.0" }
+ndarray = "0.15.6"
+ndarray-npy = "0.8.1"
+serde = { version = "1.0", features = ["derive"] }
+rand = "0.8.5"
+anyhow = "1.0.75"
+clap = { version = "4.4.6", features = ["derive"] }
+image = "0.24.7"

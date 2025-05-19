@@ -1,0 +1,7 @@
+[build]
+rustflags = [
+  "-C", "link-arg=/NODEFAULTLIB:LIBCMT",
+]
+
+[env]
+LIBTORCH_HOME = { value = "C:\\libtorch", force = true }
