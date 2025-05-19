@@ -1,21 +1,27 @@
-use burn::module::Module;
-use burn::nn::{LinearConfig, loss::CrossEntropyLoss};
-use burn::tensor::Tensor;
-use burn::backend::Autodiff;
-use burn::optim::Adam;
-use burn::nn::Linear;
-use ndarray_npy::NpzReader;
-use ndarray::Array3;
-use std::fs::File;
-use std::result::Result;
+use {
+    burn::{
+        backend::{
+            Autodiff,
+            AutodiffBackend
+        }, module::Module, nn::{
+            loss::CrossEntropyLoss, Linear, LinearConfig
+        }, optim::Adam, tensor::{backend::AutodiffBackend, Tensor}
+    },
+    ndarray::Array3,
+    ndarray_npy::NpzReader,
+    std::{
+        fs::File,
+        result::Result
+    }
+};
 
 #[derive(Module, Debug, Clone)]
-struct Model {
-    fc1: Linear<Autodiff<f32>>,
-    fc2: Linear<Autodiff<f32>>,
+struct Model<B: AutodiffBackend> {
+    fc1: Linear<Autodiff<B>>,
+    fc2: Linear<Autodiff<B>>,
 }
 
-impl Model {
+impl<B: AutodiffBackend> Model<B> {
     fn new() -> Self {
         Self {
             fc1: Linear::new(28 * 28, 64).unwrap(),
@@ -23,26 +29,26 @@ impl Model {
         }
     }
 
-    fn forward(&self, input: &Tensor<Autodiff<f32>, 2>) -> Result<Tensor<Autodiff<f32>, 2>, String> {
+    fn forward(&self, input: &Tensor<Autodiff<B>, 2>) -> Result<Tensor<Autodiff<B>, 2>, String> {
         let x = self.fc1.forward(input).map_err(|e| e.to_string())?.relu();
         self.fc2.forward(&x).map_err(|e| e.to_string())
     }
 }
 
-fn load_dataset(path: &str) -> Result<(Tensor<Autodiff<f32>, 2>, Tensor<Autodiff<f32>, 1>), String> {
+fn load_dataset(path: &str) -> Result<(Tensor<Autodiff<B>, 2>, Tensor<Autodiff<B>, 1>), String> {
     let file = File::open(path).map_err(|e| format!("Could not open {}: {}", path, e))?;
     let mut npz = NpzReader::new(file).map_err(|e| format!("Could not read {}: {}", path, e))?;
 
-    let images: Array3<f32> = npz.by_name("images.npy").map_err(|e| format!("Could not extract images: {}", e))?;
+    let images: Array3<B> = npz.by_name("images.npy").map_err(|e| format!("Could not extract images: {}", e))?;
     let num_samples = images.len_of(ndarray::Axis(0));
 
     let images_flat = images.into_shape((num_samples, 28 * 28)).map_err(|e| format!("Could not reshape images: {}", e))?;
-    let images_vec = images_flat.iter().cloned().collect::<Vec<f32>>();
-    let images_tensor = Tensor::<Autodiff<f32>, 2>::from_floats(images_vec, [num_samples, 28 * 28]).map_err(|e| e.to_string())?;
+    let images_vec = images_flat.iter().cloned().collect::<Vec<B>>();
+    let images_tensor = Tensor::<Autodiff<B>, 2>::from_floats(images_vec, &[num_samples, 28 * 28]).map_err(|e| e.to_string())?;
 
     let labels: ndarray::Array1<u8> = npz.by_name("labels.npy").map_err(|e| format!("Could not extract labels: {}", e))?;
     let labels_vec = labels.iter().map(|x| *x as i64).collect::<Vec<i64>>();
-    let labels_tensor = Tensor::<Autodiff<f32>, 1>::from_ints(labels_vec, [num_samples]).map_err(|e| e.to_string())?;
+    let labels_tensor = Tensor::<Autodiff<B>, 1>::from_ints(labels_vec, [num_samples]).map_err(|e| e.to_string())?;
 
     Ok((images_tensor, labels_tensor))
 }
@@ -101,7 +107,7 @@ fn main() {
         }
     };
 
-    let test_logits: Result<Tensor<Autodiff<f32>, 2>> = model.forward(&x_test);
+    let test_logits: Result<Tensor<Autodiff<B>, 2>> = model.forward(&x_test);
     let test_loss = CrossEntropyLoss::new().forward(test_logits, y_test.clone());
     println!("Test loss = {:?}", test_loss.clone().into_scalar());
 
@@ -110,7 +116,7 @@ fn main() {
 }
 
 // Definer en accuracy-funksjon
-fn accuracy(logits: &Tensor<Autodiff<f32>, 2>, targets: &Tensor<Autodiff<f32>, 1>) -> f64 {
+fn accuracy<B: AutodiffBackend>(logits: &Tensor<Autodiff<B>, 2>, targets: &Tensor<Autodiff<B>, 1>) -> f64 {
     let predictions = logits.argmax(1);
     let correct = predictions.eq(targets);
     correct.mean().into_scalar()
